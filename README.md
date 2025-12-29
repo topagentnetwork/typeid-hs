@@ -4,6 +4,8 @@ PostgreSQL migrations for [TypeID](https://github.com/jetify-com/typeid) using [
 
 TypeID is a type-safe, K-sortable, globally unique identifier inspired by Stripe IDs.
 
+The SQL migrations are sourced from [typeid-sql](https://github.com/jetify-com/opensource/tree/main/typeid/typeid-sql).
+
 ## Installation
 
 Add `typeid-hs` to your `build-depends` in your `.cabal` file:
