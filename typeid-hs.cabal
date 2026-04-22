@@ -53,4 +53,4 @@ library
     lens ^>=5.3,
     text ^>=2.1.1,
     transformers,
-    validation,
+    validation >=1.2,

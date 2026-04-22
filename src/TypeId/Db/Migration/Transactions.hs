@@ -1,11 +1,13 @@
 module TypeId.Db.Migration.Transactions (migrate, validate) where
 
+import Control.Lens (view)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Data.Foldable (fold)
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Data.Validation (Validation (..), toEither)
+import Data.Validation (Validation (..))
+import Data.Validation qualified as V
 import Hasql.Migration (MigrationCommand (..), MigrationError)
 import Hasql.Migration qualified as M
 import Hasql.Transaction
@@ -41,7 +43,7 @@ validate migrations = do
   searchPath <- getSearchPath
   result <-
     traverse validateMigration migrations
-      <&> toEither
+      <&> view V.either
         . fold
   setSearchPath searchPath
   pure result
