@@ -69,8 +69,13 @@ implementation. Provide concise evidence.
   The remote's `origin/master` is `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`, and
   `git diff --stat origin/master HEAD -- codd/` is empty (identical `codd/` source). The
   `cabal.project` pin was changed to `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`, which the remote
-  serves (`git ls-remote origin master` confirms). Cross-plan note: EP-4's `mori.dhall`/README
-  should reference this fetchable commit, not the unpushed one.
+  serves (`git ls-remote origin master` confirms). **Update (user-directed):** the pin was then moved
+  off the corpus fork entirely to the official upstream `https://github.com/mzabani/codd` at tag
+  `v0.1.8` (`29478ff469b1c0466a7d126d64ab3dc1dbff4756`), with no `subdir` — the official repo keeps
+  `codd.cabal` at its root (the fork's `codd/` subdir is a fork-only restructure), and the fork's
+  source carried only a CLI-only `AddMigration.hs` change and a libpq-conn-string tweak in
+  `Codd/Types.hs` on top of released `v0.1.8`, neither touching the library API used here. See the
+  Decision Log.
 
 - **`codd` solved cleanly under GHC 9.12.4 with no `allow-newer`.** The plain git pin resolved:
   `codd-0.1.8` plus transitive `uuid`, `formatting`, `haxl`, `unliftio`, `postgresql-simple`,
@@ -155,6 +160,24 @@ implementation. Provide concise evidence.
   Rationale: `b1cf7e52` is an unpushed, docs-only local commit; the remote rejects it
   (`not our ref`). `d176b30` is the pushed tip with byte-identical `codd/` source. See Surprises.
   Date: 2026-06-06
+  **Superseded 2026-06-06 (see next entry):** the user directed that `codd` be consumed from the
+  official upstream, not the corpus fork.
+
+- Decision (user-directed, supersedes the previous two pin entries): pin `codd` from the **official
+  upstream** `https://github.com/mzabani/codd` at the released tag `v0.1.8`
+  (commit `29478ff469b1c0466a7d126d64ab3dc1dbff4756`), with **no `subdir`**.
+  Rationale: The user asked to use the official repo rather than the corpus/fork
+  (`shinzui/codd-project`). Two layout facts made this more than a URL swap: (1) the official repo
+  keeps `codd.cabal` and `src/` at the repository **root**, whereas the fork restructured codd into a
+  `codd/` subdirectory — so the `subdir: codd` line is dropped for the official pin. (2) The fork's
+  built commit (`d176b30`) carried two small patches on top of released `v0.1.8`: a CLI-only change to
+  `Codd/AppCommands/AddMigration.hs` and a `Codd/Types.hs` change that omits empty
+  user/database/password fields from the libpq connection string. Neither affects the library API this
+  package uses. Pinning to the official `v0.1.8` tag gives the canonical release. Verified: `codd-0.1.8`
+  resolves cleanly under GHC 9.12.4 (no `allow-newer`), builds, and the end-to-end apply still succeeds
+  (`typeid_generate_text('user')` → `user_01ktes7n5de0jsvza3hr5hjw4r`); the official
+  `Codd/Types.hs` (which emits `password=''` etc.) works fine against a local trust-auth PostgreSQL.
+  Date: 2026-06-06
 
 
 ## Outcomes & Retrospective
@@ -166,9 +189,9 @@ named with deterministic `2024-01-01-00-00-0N-typeid-<file>` timestamps so codd 
 they do not collide with a consumer's own migrations), `applyTypeIdMigrations` (verification-aware,
 takes `CoddSettings`/`DiffTime`/`VerifySchemas`), and `migrateFromEnv :: IO ApplyResult` (reads
 `CoddSettings` from environment and applies with no verification). `codd` is pinned in
-`cabal.project` at the fetchable `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`; the dependency graph
-solved cleanly under GHC 9.12.4 with no `allow-newer`. A clean `cabal build typeid-hs-codd`
-compiles warning-free.
+`cabal.project` from the official upstream `https://github.com/mzabani/codd` at tag `v0.1.8`
+(`29478ff469b1c0466a7d126d64ab3dc1dbff4756`, no `subdir`); the dependency graph solved cleanly under
+GHC 9.12.4 with no `allow-newer`. A clean `cabal build typeid-hs-codd` compiles warning-free.
 
 Verified end-to-end against PostgreSQL 17: `migrateFromEnv` applied all four migrations in one
 committed transaction (`COMMITed transaction` / `Successfully applied all migrations`), returned
@@ -478,15 +501,16 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/shinzui/codd-project
-  tag: b1cf7e52da5799a76e538e9382d55e84d67b0656
-  subdir: codd
+  location: https://github.com/mzabani/codd
+  tag: 29478ff469b1c0466a7d126d64ab3dc1dbff4756
 ```
 
-   The `codd` commit `b1cf7e52da5799a76e538e9382d55e84d67b0656` is the current HEAD of the
-   mori-registered checkout at `/Users/shinzui/Keikaku/hub/haskell/codd-project`; if that commit is not
-   fetchable, obtain a current one with `git -C /Users/shinzui/Keikaku/hub/haskell/codd-project rev-parse
-   HEAD`. `codd`'s `.cabal` lives in the `codd/` subdirectory, hence `subdir: codd`.
+   Pin `codd` from the **official upstream** `https://github.com/mzabani/codd` at the released tag
+   `v0.1.8` (commit `29478ff469b1c0466a7d126d64ab3dc1dbff4756`). Note there is **no `subdir`**: the
+   official repo keeps `codd.cabal` and `src/` at its repository root. (The corpus checkout at
+   `/Users/shinzui/Keikaku/hub/haskell/codd-project` is a fork that restructures codd into a `codd/`
+   subdirectory and carries small extra patches; read it for source reference, but pin the official
+   release. This decision was made at the user's direction — see the Decision Log.)
 
 7. Resolve the dependency. First create a minimal placeholder module so the library has something to
    build, then attempt the build:
