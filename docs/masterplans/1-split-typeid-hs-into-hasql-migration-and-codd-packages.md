@@ -101,7 +101,7 @@ single pass after both backends exist.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 1 | Create typeid-hs-sql shared core and multi-package layout | docs/plans/1-create-typeid-hs-sql-shared-core-and-multi-package-layout.md | None | None | Complete |
-| 2 | Rename and refactor typeid-hs-hasql-migration onto typeid-hs-sql | docs/plans/2-rename-and-refactor-typeid-hs-hasql-migration-onto-typeid-hs-sql.md | EP-1 | None | Not Started |
+| 2 | Rename and refactor typeid-hs-hasql-migration onto typeid-hs-sql | docs/plans/2-rename-and-refactor-typeid-hs-hasql-migration-onto-typeid-hs-sql.md | EP-1 | None | Complete |
 | 3 | Create typeid-hs-codd package | docs/plans/3-create-typeid-hs-codd-package.md | EP-1 | None | Not Started |
 | 4 | Wire nix, mori, and docs for the split packages | docs/plans/4-wire-nix-mori-docs-for-the-split-packages.md | EP-1 | EP-2, EP-3 | Not Started |
 
@@ -195,9 +195,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 
 - [x] EP-1: Multi-package `cabal.project` builds and `typeid-hs-sql` compiles
 - [x] EP-1: `TypeId.Db.Sql` exposes `version`, `migrationFiles`, `sqlFiles` from embedded SQL
-- [ ] EP-2: `typeid-hs-hasql-migration` package exists, renamed from `typeid-hs`
-- [ ] EP-2: `V0_0_1` consumes `typeid-hs-sql`; old root package and `database/` removed
-- [ ] EP-2: Public API (`TypeId.Db.Migration` et al.) and behavior preserved; builds clean
+- [x] EP-2: `typeid-hs-hasql-migration` package exists, renamed from `typeid-hs`
+- [x] EP-2: `V0_0_1` consumes `typeid-hs-sql`; old root package and `database/` removed
+- [x] EP-2: Public API (`TypeId.Db.Migration` et al.) and behavior preserved; builds clean
 - [ ] EP-3: `typeid-hs-codd` package exists and resolves the `codd` dependency
 - [ ] EP-3: `TypeId.Db.Codd.Migration` exposes `migrations` and `migrate` over `codd`
 - [ ] EP-3: Migrations apply against a real PostgreSQL; TypeID objects verified present
@@ -211,7 +211,17 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 Document cross-plan insights, dependency changes, scope adjustments, or unexpected
 interactions between child plans. Provide concise evidence.
 
-(None yet.)
+- **hasql session-runner API changed (affects EP-4's README example).** Discovered during EP-2
+  Milestone 3: the resolved `hasql` is 1.10.3.2, which no longer exports `run` from
+  `Hasql.Session`. The session runner is now
+  `Hasql.Connection.use :: Connection -> Session a -> IO (Either SessionError a)` (reversed argument
+  order vs. the old `Hasql.Session.run :: Session a -> Connection -> IO (Either QueryError a)`, and a
+  new `SessionError` result type). This does **not** affect any package's source — neither backend
+  calls `run`/`use`; they only build migration values. It affects the documented "Running Migrations"
+  usage example, which EP-4 owns. **EP-4 must write the README example with `Hasql.Connection.use`,
+  not `Hasql.Session.run`.** Evidence: `cabal repl` reported `Module 'Hasql.Session' does not export
+  'run'`; the verified end-to-end driver `Conn.use c Migration.migrate >>= print` printed
+  `Right (Right ())`, and `typeid_generate_text('user')` returned `user_01kteq5as6epdv2fj9p4a17d6w`.
 
 
 ## Decision Log

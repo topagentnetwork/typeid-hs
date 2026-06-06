@@ -1,5 +1,6 @@
 packages:
   ./typeid-hs-sql
+  ./typeid-hs-hasql-migration
 
 source-repository-package
   type: git

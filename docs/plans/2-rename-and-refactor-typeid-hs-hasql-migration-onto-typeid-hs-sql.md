@@ -47,10 +47,10 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 1: `typeid-hs-hasql-migration/` package created; sources moved; `.cabal` renamed
-- [ ] Milestone 1: old root `typeid-hs.cabal` and `src/` removed; `cabal.project` updated
-- [ ] Milestone 2: `V0_0_1` rewritten to consume `typeid-hs-sql` (`sqlFiles`/`version`); builds clean
-- [ ] Milestone 3: public API unchanged (GHCi `:type` checks); behavior validated against PostgreSQL
+- [x] Milestone 1: `typeid-hs-hasql-migration/` package created; sources moved; `.cabal` renamed (2026-06-06)
+- [x] Milestone 1: old root `typeid-hs.cabal` and `src/` removed; `cabal.project` updated (2026-06-06)
+- [x] Milestone 2: `V0_0_1` rewritten to consume `typeid-hs-sql` (`sqlFiles`/`version`); builds clean (2026-06-06)
+- [x] Milestone 3: public API unchanged (GHCi `:type` checks); behavior validated against PostgreSQL (2026-06-06)
 
 
 ## Surprises & Discoveries
@@ -58,7 +58,19 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- The pinned `hasql` version (1.10.3.2, resolved from the package set) no longer exports
+  `run` from `Hasql.Session`. The Milestone 3 step 10 driver example (and the root README's
+  "Running Migrations" snippet, which EP-4 owns) used the old
+  `Hasql.Session.run :: Session a -> Connection -> IO (Either QueryError a)`. In hasql 1.10 the
+  session runner moved to `Hasql.Connection.use :: Connection -> Session a -> IO (Either SessionError a)`
+  (note the reversed argument order and the new `SessionError` result type). This affects only the
+  validation driver and the README example, **not** the package source — `typeid-hs-hasql-migration`
+  itself does not call `run`/`use`; it only builds `MigrationCommand` values. The end-to-end run
+  therefore used `Conn.use c Migration.migrate >>= print`, which printed `Right (Right ())`.
+  Evidence: `cabal repl` reported `Module 'Hasql.Session' does not export 'run'`; reading
+  `hasql/src/library/Hasql/Connection.hs` showed `use :: Connection -> Session a -> IO (Either SessionError a)`.
+  Cross-plan impact: EP-4 must use `Hasql.Connection.use` (not `Hasql.Session.run`) in the README
+  usage example. Recorded in the MasterPlan Surprises & Discoveries.
 
 
 ## Decision Log
@@ -77,6 +89,30 @@ implementation. Provide concise evidence.
   exact name keeps a database migrated by the old `typeid-hs` package consistent with one migrated by
   the renamed package, so already-migrated databases are not re-run or flagged.
   Date: 2026-06-06
+
+
+## Outcomes & Retrospective
+
+EP-2 is complete. The `hasql-migration` backend now lives in its own package directory,
+`typeid-hs-hasql-migration/`, renamed from the former root `typeid-hs` package (the old
+`typeid-hs.cabal` and root `src/` are deleted; `cabal.project` lists `./typeid-hs-sql` and
+`./typeid-hs-hasql-migration` and preserves the `hasql-migration` git pin). The one embedding
+module, `TypeId.Db.Migration.Migrations.V0_0_1`, no longer uses `TemplateHaskell`/`file-embed`;
+it imports `TypeId.Db.Sql` and builds its `[MigrationCommand]` from `Sql.migrationFiles` /
+`Sql.sqlFiles` / `Sql.version`, preserving the exact migration names (`"v0.0.1/<file>"`) and
+ordering. The package no longer depends on `file-embed`.
+
+The public API of `TypeId.Db.Migration` is unchanged: `migrate`, `validate`, `getMigrations`,
+`migrations`, and `version` carry the same signatures (verified by `:type` in GHCi). A clean
+`cabal build all` compiles both packages warning-free. End-to-end against a throwaway
+PostgreSQL 17 instance, `Conn.use c Migration.migrate` returned `Right (Right ())` and
+`typeid_generate_text('user')` produced `user_01kteq5as6epdv2fj9p4a17d6w`, proving the SQL
+applied. The only deviation from the plan was the session-runner API (see Surprises): the plan's
+example used the removed `Hasql.Session.run`; the live hasql exposes `Hasql.Connection.use`. This
+is a validation-driver/README concern only, not a package-code change, and is flagged for EP-4.
+
+(Note: this section header was absent from the generated skeleton and added during EP-2
+implementation, as the ExecPlan spec requires every plan to maintain an Outcomes section.)
 
 
 ## Context and Orientation
