@@ -103,7 +103,7 @@ single pass after both backends exist.
 | 1 | Create typeid-hs-sql shared core and multi-package layout | docs/plans/1-create-typeid-hs-sql-shared-core-and-multi-package-layout.md | None | None | Complete |
 | 2 | Rename and refactor typeid-hs-hasql-migration onto typeid-hs-sql | docs/plans/2-rename-and-refactor-typeid-hs-hasql-migration-onto-typeid-hs-sql.md | EP-1 | None | Complete |
 | 3 | Create typeid-hs-codd package | docs/plans/3-create-typeid-hs-codd-package.md | EP-1 | None | Complete |
-| 4 | Wire nix, mori, and docs for the split packages | docs/plans/4-wire-nix-mori-docs-for-the-split-packages.md | EP-1 | EP-2, EP-3 | Not Started |
+| 4 | Wire nix, mori, and docs for the split packages | docs/plans/4-wire-nix-mori-docs-for-the-split-packages.md | EP-1 | EP-2, EP-3 | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -201,9 +201,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-3: `typeid-hs-codd` package exists and resolves the `codd` dependency
 - [x] EP-3: `TypeId.Db.Codd.Migration` exposes `migrations`, `applyTypeIdMigrations`, `migrateFromEnv` over `codd`
 - [x] EP-3: Migrations apply against a real PostgreSQL; TypeID objects verified present
-- [ ] EP-4: `mori.dhall` lists three packages and the `codd` dependency
-- [ ] EP-4: Nix flake builds/checks all three packages from the dev shell
-- [ ] EP-4: README documents both backends and the consumer migration path
+- [x] EP-4: `mori.dhall` lists three packages and the `codd` dependency
+- [x] EP-4: Nix flake builds/checks all three packages from the dev shell
+- [x] EP-4: README documents both backends and the consumer migration path
 
 
 ## Surprises & Discoveries
@@ -240,14 +240,21 @@ interactions between child plans. Provide concise evidence.
   `COMMITed transaction`; `migrateFromEnv` returned `SchemasNotVerified`; `typeid_generate_text('user')`
   returned `user_01kteqv370e2btyfanv9dvby71`. See `docs/plans/3-create-typeid-hs-codd-package.md`.
 
-- **The codd pin commit changed (affects EP-4's `mori.dhall`/README).** The planned codd pin
-  `b1cf7e52da5799a76e538e9382d55e84d67b0656` is an unpushed, docs-only local commit; the remote rejects
-  it (`upload-pack: not our ref`). EP-3 pinned `codd` at the fetchable `origin/master`,
-  `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`, whose `codd/` source is byte-identical
-  (`git diff --stat origin/master HEAD -- codd/` is empty). EP-4 should reference
-  `d176b3088f23ef2218c7a1f31835e8ee0c0601aa` when documenting the codd dependency. The codd dependency
-  graph solved cleanly under GHC 9.12.4 with **no `allow-newer`** needed (plain git pin), and the
-  package needed two extra direct deps beyond the EP-3 plan list: `exceptions` and `unliftio-core`.
+- **The codd pin was moved to the official upstream `mzabani/codd` (user-directed).** The plan
+  originally pinned `codd` from the corpus fork `shinzui/codd-project`. First, the planned commit
+  `b1cf7e52...` proved unfetchable (an unpushed, docs-only local commit; remote: `not our ref`), so EP-3
+  briefly pinned the fork's `origin/master` `d176b30...`. The user then directed that codd be consumed
+  from the **official repo**, not the corpus fork. The final pin is
+  `https://github.com/mzabani/codd` at tag `v0.1.8` (`29478ff469b1c0466a7d126d64ab3dc1dbff4756`) with
+  **no `subdir`** — the official repo keeps `codd.cabal`/`src/` at its **root**, whereas the fork
+  restructured codd into a `codd/` subdirectory. The fork's source carried only a CLI-only
+  `AddMigration.hs` change and a libpq connection-string tweak in `Codd/Types.hs` on top of released
+  `v0.1.8`; neither touches the library API used here, and the end-to-end apply was re-verified against
+  the official release (`typeid_generate_text('user')` → `user_01ktes7n5de0jsvza3hr5hjw4r`). The codd
+  dependency graph solved cleanly under GHC 9.12.4 with **no `allow-newer`** needed, and the package
+  needed two extra direct deps beyond the EP-3 plan list: `exceptions` and `unliftio-core`. EP-4's
+  README links the official `mzabani/codd`; `mori.dhall`'s registered dependency name remains
+  `mzabani/codd`.
 
 
 ## Decision Log
@@ -290,6 +297,15 @@ interactions between child plans. Provide concise evidence.
   clearest baseline for the new naming scheme.
   Date: 2026-06-06
 
+- Decision (user-directed, 2026-06-06): Consume `codd` from the official upstream
+  `https://github.com/mzabani/codd` (tag `v0.1.8`, commit `29478ff469b1c0466a7d126d64ab3dc1dbff4756`,
+  no `subdir`) rather than from the corpus fork `shinzui/codd-project`.
+  Rationale: The user asked to depend on the official repo. The official repo keeps `codd.cabal`/`src/`
+  at its root (no `codd/` subdir), and its released `v0.1.8` differs from the fork only by a CLI-only
+  change and a libpq-conn-string tweak that do not affect the library API used here. Re-verified to
+  build and apply end-to-end. See Surprises & Discoveries and
+  `docs/plans/3-create-typeid-hs-codd-package.md` Decision Log.
+
 - Decision: Do not commit `codd` expected-schema snapshot files to this repository.
   Rationale: This is a library, not a service. Per `codd`'s adoption guidance, the consuming service
   owns `CODD_EXPECTED_SCHEMA_DIR`. Shipping a snapshot here would impose this repo's environment
@@ -302,4 +318,37 @@ interactions between child plans. Provide concise evidence.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original vision.
 
-(To be filled during and after implementation.)
+**The initiative is complete; all four child plans are done.** The repository is now a cabal
+multi-package monorepo delivering the same TypeID SQL through three packages, exactly as the Vision
+described:
+
+- `typeid-hs-sql` embeds the four SQL files once (the only copy lives at
+  `typeid-hs-sql/database/v0.0.1/`) and exposes `version` / `migrationFiles` / `sqlFiles` from
+  `TypeId.Db.Sql`, depending on neither `hasql` nor `codd`.
+- `typeid-hs-hasql-migration` is the renamed former `typeid-hs`: its public API
+  (`TypeId.Db.Migration` with `migrate`/`validate`/`getMigrations`/`migrations`/`version`) and module
+  names are unchanged, and it now consumes `typeid-hs-sql` instead of embedding SQL. Verified
+  end-to-end against PostgreSQL 17.
+- `typeid-hs-codd` applies the same SQL through codd, exposing `migrations`, `applyTypeIdMigrations`,
+  and `migrateFromEnv`. Verified end-to-end (all four migrations committed in order;
+  `typeid_generate_text('user')` returns a TypeID).
+
+Build wiring (`cabal.project`, the Nix flake, `mori.dhall`) and the README all describe the
+three-package reality, both backends, and the consumer migration path. `cabal build all` and
+`nix develop --command cabal build all` are green. The deliberate breaking rename
+(`typeid-hs` → `typeid-hs-hasql-migration`) is documented for consumers.
+
+**What changed versus the plan, and the lessons.** Three decompositions held up well — EP-1 was the
+clean root, EP-2/EP-3 were genuinely independent (only `cabal.project` to reconcile), and EP-4
+finalized cleanly. The notable course corrections, all captured in Surprises & Discoveries:
+(1) the pinned `hasql` (1.10) had moved its session runner from `Hasql.Session.run` to
+`Hasql.Connection.use` and made `acquire` take a `Settings`/`IsString` value — this rippled from
+EP-2's validation into EP-4's README, confirming the value of compiling documentation snippets.
+(2) codd's `LaxCheck` is not "no verification" (it reads an on-disk snapshot and fails without one),
+so EP-3's `migrateFromEnv` uses `applyMigrationsNoCheck` and returns `SchemasNotVerified`, which
+better matches the "consumer owns the snapshot" model than the original plan's `LaxCheck`.
+(3) at the user's direction, codd is pinned from the official `mzabani/codd` (tag `v0.1.8`, no
+`subdir`) rather than the corpus fork — which surfaced that the official repo keeps `codd.cabal` at
+its root while the fork uses a `codd/` subdir. The codd dependency solved cleanly under GHC 9.12.4
+with no `allow-newer`. The one out-of-scope item deliberately not done, per the Vision, is shipping
+a codd expected-schema snapshot — that remains the consuming service's responsibility.

@@ -9,7 +9,7 @@ in  Schema.Project::{
       , type = Schema.PackageType.Library
       , language = Schema.Language.Haskell
       , lifecycle = Schema.Lifecycle.Active
-      , description = Some "PostgreSQL migrations for TypeID using hasql-migration"
+      , description = Some "PostgreSQL TypeID migrations, shipped as hasql-migration and codd backends over a shared SQL core"
       , domains = [ "TypeID", "Database" ]
       , owners = [ "shinzui" ]
       }
@@ -21,16 +21,31 @@ in  Schema.Project::{
       ]
     , packages =
       [ Schema.Package::{
-        , name = "typeid-hs"
+        , name = "typeid-hs-sql"
         , type = Schema.PackageType.Library
         , language = Schema.Language.Haskell
-        , path = Some "."
-        , description = Some "PostgreSQL migrations for TypeID using hasql-migration"
+        , path = Some "typeid-hs-sql"
+        , description = Some "Embedded TypeID PostgreSQL SQL, tool-agnostic"
+        }
+      , Schema.Package::{
+        , name = "typeid-hs-hasql-migration"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "typeid-hs-hasql-migration"
+        , description = Some "PostgreSQL TypeID migrations via hasql-migration"
+        }
+      , Schema.Package::{
+        , name = "typeid-hs-codd"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "typeid-hs-codd"
+        , description = Some "PostgreSQL TypeID migrations via codd"
         }
       ]
     , dependencies =
       [ "shinzui/hasql-migration"
       , "hasql/hasql"
       , "ekmett/lens"
+      , "mzabani/codd"
       ]
     }

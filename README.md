@@ -1,33 +1,57 @@
 # typeid-hs
 
-PostgreSQL migrations for [TypeID](https://github.com/jetify-com/typeid) using [hasql-migration](https://hackage.haskell.org/package/hasql-migration).
+PostgreSQL migrations for [TypeID](https://github.com/jetify-com/typeid), shipped as two
+interchangeable backends over a shared SQL core. TypeID is a type-safe, K-sortable, globally
+unique identifier inspired by Stripe IDs.
 
-TypeID is a type-safe, K-sortable, globally unique identifier inspired by Stripe IDs.
+The SQL migrations are sourced from
+[typeid-sql](https://github.com/jetify-com/opensource/tree/main/typeid/typeid-sql).
 
-The SQL migrations are sourced from [typeid-sql](https://github.com/jetify-com/opensource/tree/main/typeid/typeid-sql).
+## Packages
 
-## Installation
+This repository builds three packages:
 
-Add `typeid-hs` to your `build-depends` in your `.cabal` file:
+- **`typeid-hs-sql`** — the embedded TypeID SQL exposed as plain Haskell values (the version
+  string, the ordered file names, and each file's bytes). Tool-agnostic; depends on neither hasql
+  nor codd. The two backends build on it.
+- **`typeid-hs-hasql-migration`** — applies the migrations with
+  [hasql-migration](https://hackage.haskell.org/package/hasql-migration). Choose this if your
+  project already uses hasql.
+- **`typeid-hs-codd`** — applies the same migrations with [codd](https://github.com/mzabani/codd).
+  Choose this if your project uses codd's forward-only, schema-verifying workflow.
+
+Depend on exactly one backend; it pulls in `typeid-hs-sql` for you. Both backends install the
+identical set of PostgreSQL objects (see [What Gets Installed](#what-gets-installed)).
+
+## Migrating from `typeid-hs`
+
+The package formerly named `typeid-hs` is now `typeid-hs-hasql-migration`. Its modules and API are
+unchanged — only the package name changed. Update your `build-depends`:
 
 ```cabal
 build-depends:
-  typeid-hs
+  typeid-hs-hasql-migration   -- was: typeid-hs
 ```
 
-## Usage
+No code changes are needed: `import TypeId.Db.Migration` and the
+`migrate`/`validate`/`getMigrations` functions are identical.
+
+## Usage — hasql-migration backend
+
+Add `typeid-hs-hasql-migration` to your `build-depends`.
 
 ### Running Migrations
 
 ```haskell
-import Hasql.Connection (acquire, release)
-import Hasql.Session (run)
+{-# LANGUAGE OverloadedStrings #-}
+
+import Hasql.Connection (acquire, release, use)
 import TypeId.Db.Migration qualified as Migration
 
 main :: IO ()
 main = do
   Right connection <- acquire "host=localhost dbname=mydb user=postgres"
-  result <- run Migration.migrate connection
+  result <- use connection Migration.migrate
   case result of
     Right (Right ()) -> putStrLn "Migrations applied successfully"
     Right (Left migrationError) -> print migrationError
@@ -35,19 +59,23 @@ main = do
   release connection
 ```
 
+`Migration.migrate` is a `hasql` `Session`; `Hasql.Connection.use` runs it against a connection and
+returns `Either SessionError (Either MigrationError ())`.
+
 ### Validating Migrations
 
 Check migrations without executing them:
 
 ```haskell
-import Hasql.Connection (acquire, release)
-import Hasql.Session (run)
+{-# LANGUAGE OverloadedStrings #-}
+
+import Hasql.Connection (acquire, release, use)
 import TypeId.Db.Migration qualified as Migration
 
 validateMigrations :: IO ()
 validateMigrations = do
   Right connection <- acquire "host=localhost dbname=mydb user=postgres"
-  result <- run Migration.validate connection
+  result <- use connection Migration.validate
   case result of
     Right (Right ()) -> putStrLn "All migrations valid"
     Right (Left errors) -> mapM_ print errors
@@ -58,21 +86,69 @@ validateMigrations = do
 ### Checking Applied Migrations
 
 ```haskell
-import Hasql.Connection (acquire, release)
-import Hasql.Session (run)
+{-# LANGUAGE OverloadedStrings #-}
+
+import Hasql.Connection (acquire, release, use)
 import TypeId.Db.Migration qualified as Migration
 
 listMigrations :: IO ()
 listMigrations = do
   Right connection <- acquire "host=localhost dbname=mydb user=postgres"
-  Right migrations <- run Migration.getMigrations connection
+  Right migrations <- use connection Migration.getMigrations
   mapM_ print migrations
   release connection
 ```
 
+## Usage — codd backend
+
+Add `typeid-hs-codd` to your `build-depends`. The migrations are exposed as codd
+`AddedSqlMigration` values, plus helpers to apply them.
+
+The batteries-included entry point reads its configuration from codd's environment variables and
+applies the migrations without verifying the schema (it does not require an expected-schema
+snapshot):
+
+```haskell
+import Codd (ApplyResult (..))
+import TypeId.Db.Codd.Migration (migrateFromEnv)
+
+main :: IO ()
+main = do
+  -- reads CODD_CONNECTION, CODD_MIGRATION_DIRS, CODD_EXPECTED_SCHEMA_DIR, and optional CODD_SCHEMAS
+  result <- migrateFromEnv
+  case result of
+    SchemasMatch _ -> putStrLn "Migrations applied; schema matches the snapshot"
+    SchemasDiffer _ -> putStrLn "Migrations applied; schema differs from the snapshot"
+    SchemasNotVerified -> putStrLn "Migrations applied (schema not verified)"
+```
+
+To compose the TypeID migrations with your service's own migrations, use `migrations` (a list of
+codd `AddedSqlMigration` values) and `applyTypeIdMigrations`, supplying your own `CoddSettings` and
+choosing `StrictCheck` or `LaxCheck`:
+
+```haskell
+import Codd (CoddSettings, VerifySchemas (StrictCheck))
+import Codd.Logging (runCoddLogger)
+import Data.Time (secondsToDiffTime)
+import TypeId.Db.Codd.Migration (applyTypeIdMigrations)
+
+apply :: CoddSettings -> IO ()
+apply settings = runCoddLogger $ do
+  -- applyTypeIdMigrations runs in any monad satisfying codd's constraints;
+  -- runCoddLogger discharges them to IO (LoggingT IO).
+  _ <- applyTypeIdMigrations settings (secondsToDiffTime 5) StrictCheck
+  pure ()
+```
+
+Note: codd verifies the live database schema against an on-disk snapshot. Both `StrictCheck` and
+`LaxCheck` read that snapshot and fail if it is absent, so they require your service to own a
+snapshot directory (`CODD_EXPECTED_SCHEMA_DIR`). This package does not ship a snapshot — that is the
+consuming service's responsibility. Use `migrateFromEnv` (no verification) when you do not have a
+snapshot.
+
 ## What Gets Installed
 
-The migrations install the following PostgreSQL objects:
+Both backends install the following PostgreSQL objects:
 
 | Object | Description |
 |--------|-------------|
@@ -117,8 +193,12 @@ SELECT * FROM users WHERE id === 'user_01h455vb4pex5vsknk084sn02q';
 
 ## Version
 
+The schema version is available from both backends' top-level modules:
+
 ```haskell
-import TypeId.Db.Migration (version)
+import TypeId.Db.Migration (version)        -- hasql-migration backend
+-- or
+import TypeId.Db.Codd.Migration (version)   -- codd backend
 
 main = putStrLn version  -- "v0.0.1"
 ```

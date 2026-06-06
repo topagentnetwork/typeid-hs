@@ -47,10 +47,10 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 1: `mori.dhall` updated — three packages, codd dependency, refreshed description
-- [ ] Milestone 1: `mori show --full` reflects the three packages and dependencies
-- [ ] Milestone 2: Nix dev shell builds all three packages (`nix develop --command cabal build all`)
-- [ ] Milestone 3: root README rewritten — both backends documented; consumer migration note added
+- [x] Milestone 1: `mori.dhall` updated — three packages, codd dependency, refreshed description (2026-06-06)
+- [x] Milestone 1: `mori show --full` reflects the three packages and dependencies (2026-06-06)
+- [x] Milestone 2: Nix dev shell builds all three packages (`nix develop --command cabal build all`); `flake.nix` description fixed (2026-06-06)
+- [x] Milestone 3: root README rewritten — both backends documented; consumer migration note added; all code examples typecheck (2026-06-06)
 
 
 ## Surprises & Discoveries
@@ -58,7 +58,26 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- **The plan's README code examples were stale against the pinned library versions; all were
+  corrected and typechecked before finalizing.** Four corrections were needed: (1) hasql 1.10 no
+  longer exports `run` from `Hasql.Session`; the session runner is
+  `Hasql.Connection.use :: Connection -> Session a -> IO (Either SessionError a)` (this matches the
+  MasterPlan Surprises entry from EP-2). (2) `Hasql.Connection.acquire` now takes a `Settings` type,
+  not a bare `ByteString`; the string-literal connection examples require
+  `{-# LANGUAGE OverloadedStrings #-}` (verified `Settings` derives `IsString`). (3) codd's
+  `ApplyResult` has **no `Show` instance**, so the plan's `print result` in the codd example would not
+  compile; the README pattern-matches the three constructors instead. (4) `applyTypeIdMigrations`
+  cannot run in plain `IO` (`No instance for CoddLogger IO`); the example runs it in `LoggingT IO` via
+  `Codd.Logging.runCoddLogger`. Every README snippet was extracted and compiled with
+  `ghc -fno-code -package <backend>` until it typechecked with exit 0.
+
+- **The codd dependency was repinned to the official upstream mid-EP-4 (user-directed).** While
+  finalizing the docs, the user directed that codd be consumed from `https://github.com/mzabani/codd`
+  rather than the corpus fork `shinzui/codd-project`. This is an EP-3-owned `cabal.project` change;
+  it was made here and re-verified (build + end-to-end apply). The README already links the official
+  `mzabani/codd`, and `mori.dhall`'s registered dependency name is `mzabani/codd`, so no further doc
+  change was needed. Full rationale in `docs/plans/3-create-typeid-hs-codd-package.md` Decision Log
+  and the MasterPlan Surprises & Discoveries / Decision Log.
 
 
 ## Decision Log
@@ -76,6 +95,30 @@ implementation. Provide concise evidence.
   clear migration note serves that best. Package-level READMEs may still be added by plans 2/3 for
   package pages, but the root README is the canonical entry point.
   Date: 2026-06-06
+
+
+## Outcomes & Retrospective
+
+EP-4 is complete, finalizing the initiative. `mori.dhall` now declares all three packages
+(`typeid-hs-sql`, `typeid-hs-hasql-migration`, `typeid-hs-codd`) with correct paths and
+descriptions, adds `mzabani/codd` to the dependency list, and carries a both-backends project
+description; `mori show --full` renders three packages and four dependencies without a Dhall error.
+`flake.nix`'s stale `"Haskell nix template"` description is replaced, and
+`nix develop --command cabal build all` builds all three packages in the pinned GHC 9.12.4 dev
+shell. The root `README.md` is rewritten to present the three packages, help a reader choose a
+backend, document both `migrate` flows, and explain the `typeid-hs` → `typeid-hs-hasql-migration`
+rename; no stale bare `typeid-hs` `build-depends` reference remains outside the migration note.
+
+The main lesson (see Surprises) is that documentation examples must be compiled, not trusted: the
+plan's README snippets were stale against the actually-pinned `hasql` (1.10, which moved `run` to
+`Hasql.Connection.use` and made `acquire` take a `Settings`/`IsString` value) and `codd` (whose
+`ApplyResult` is not `Show` and whose `applyTypeIdMigrations` needs `LoggingT IO`, not `IO`). Each
+snippet was compiled with `ghc -fno-code` until green. Separately, the user redirected the codd
+dependency to the official `mzabani/codd` (tag `v0.1.8`, no `subdir`) during this plan; that
+`cabal.project` change was applied and re-verified end-to-end.
+
+(Note: this section header was absent from the generated skeleton and added during EP-4
+implementation, as the ExecPlan spec requires every plan to maintain an Outcomes section.)
 
 
 ## Context and Orientation

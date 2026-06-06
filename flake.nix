@@ -1,5 +1,5 @@
 {
-  description = "Haskell nix template";
+  description = "PostgreSQL TypeID migrations: hasql-migration and codd backends over a shared SQL core";
 
   inputs = {
     # The shared base flake. Provides the GHC 9.12.4 / cabal / HLS toolchain via
