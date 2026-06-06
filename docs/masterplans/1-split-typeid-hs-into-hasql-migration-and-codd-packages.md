@@ -102,7 +102,7 @@ single pass after both backends exist.
 |---|-------|------|-----------|-----------|--------|
 | 1 | Create typeid-hs-sql shared core and multi-package layout | docs/plans/1-create-typeid-hs-sql-shared-core-and-multi-package-layout.md | None | None | Complete |
 | 2 | Rename and refactor typeid-hs-hasql-migration onto typeid-hs-sql | docs/plans/2-rename-and-refactor-typeid-hs-hasql-migration-onto-typeid-hs-sql.md | EP-1 | None | Complete |
-| 3 | Create typeid-hs-codd package | docs/plans/3-create-typeid-hs-codd-package.md | EP-1 | None | Not Started |
+| 3 | Create typeid-hs-codd package | docs/plans/3-create-typeid-hs-codd-package.md | EP-1 | None | Complete |
 | 4 | Wire nix, mori, and docs for the split packages | docs/plans/4-wire-nix-mori-docs-for-the-split-packages.md | EP-1 | EP-2, EP-3 | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -198,9 +198,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-2: `typeid-hs-hasql-migration` package exists, renamed from `typeid-hs`
 - [x] EP-2: `V0_0_1` consumes `typeid-hs-sql`; old root package and `database/` removed
 - [x] EP-2: Public API (`TypeId.Db.Migration` et al.) and behavior preserved; builds clean
-- [ ] EP-3: `typeid-hs-codd` package exists and resolves the `codd` dependency
-- [ ] EP-3: `TypeId.Db.Codd.Migration` exposes `migrations` and `migrate` over `codd`
-- [ ] EP-3: Migrations apply against a real PostgreSQL; TypeID objects verified present
+- [x] EP-3: `typeid-hs-codd` package exists and resolves the `codd` dependency
+- [x] EP-3: `TypeId.Db.Codd.Migration` exposes `migrations`, `applyTypeIdMigrations`, `migrateFromEnv` over `codd`
+- [x] EP-3: Migrations apply against a real PostgreSQL; TypeID objects verified present
 - [ ] EP-4: `mori.dhall` lists three packages and the `codd` dependency
 - [ ] EP-4: Nix flake builds/checks all three packages from the dev shell
 - [ ] EP-4: README documents both backends and the consumer migration path
@@ -223,6 +223,32 @@ interactions between child plans. Provide concise evidence.
   'run'`; the verified end-to-end driver `Conn.use c Migration.migrate >>= print` printed
   `Right (Right ())`, and `typeid_generate_text('user')` returned `user_01kteq5as6epdv2fj9p4a17d6w`.
 
+- **codd's `LaxCheck` is not "no verification"; EP-3's `migrateFromEnv` API was revised (affects EP-4
+  docs).** The EP-3 Decision Log (and this MasterPlan's Decision Log) originally said `typeid-hs-codd`'s
+  simple entry point would apply migrations with `LaxCheck`, treating that as "no verification." During
+  EP-3 implementation this proved false: codd's `LaxCheck` and `StrictCheck` both read an expected-schema
+  snapshot from `CODD_EXPECTED_SCHEMA_DIR`, and a *missing* snapshot is a hard I/O error that rolls back
+  the whole migration (first run threw `File .../v17/db-settings was expected but does not exist` and
+  nothing committed). `Codd.applyMigrations` only ever returns `SchemasMatch`/`SchemasDiffer`;
+  `SchemasNotVerified` is the no-check result. Resolution: `migrateFromEnv` now uses
+  `Codd.applyMigrationsNoCheck` (reads no snapshot) and returns `SchemasNotVerified`, which honors the
+  original intent ("default to no schema verification; the consumer owns the snapshot") better than
+  `LaxCheck` did. The verification-aware `applyTypeIdMigrations` still accepts a `VerifySchemas` argument
+  for consumers who own a snapshot. **EP-4 must document the two paths accordingly** — `migrateFromEnv`
+  as the snapshot-less apply, `applyTypeIdMigrations` for `Strict`/`Lax` verification — and must not
+  describe `LaxCheck` as snapshot-free. Evidence after the fix: log shows all four migrations and
+  `COMMITed transaction`; `migrateFromEnv` returned `SchemasNotVerified`; `typeid_generate_text('user')`
+  returned `user_01kteqv370e2btyfanv9dvby71`. See `docs/plans/3-create-typeid-hs-codd-package.md`.
+
+- **The codd pin commit changed (affects EP-4's `mori.dhall`/README).** The planned codd pin
+  `b1cf7e52da5799a76e538e9382d55e84d67b0656` is an unpushed, docs-only local commit; the remote rejects
+  it (`upload-pack: not our ref`). EP-3 pinned `codd` at the fetchable `origin/master`,
+  `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`, whose `codd/` source is byte-identical
+  (`git diff --stat origin/master HEAD -- codd/` is empty). EP-4 should reference
+  `d176b3088f23ef2218c7a1f31835e8ee0c0601aa` when documenting the codd dependency. The codd dependency
+  graph solved cleanly under GHC 9.12.4 with **no `allow-newer`** needed (plain git pin), and the
+  package needed two extra direct deps beyond the EP-3 plan list: `exceptions` and `unliftio-core`.
+
 
 ## Decision Log
 
@@ -242,14 +268,21 @@ interactions between child plans. Provide concise evidence.
   Date: 2026-06-06
 
 - Decision: The `typeid-hs-codd` package exposes a codd-idiomatic API (a `migrations` value of type
-  `[AddedSqlMigration m]` plus a thin `migrate` wrapper over `Codd.applyMigrations`), defaulting to
-  no schema verification (`LaxCheck`), rather than mimicking the hasql backend's `migrate`/`validate`
-  Either-returning shape.
+  `[AddedSqlMigration m]` plus thin wrappers over `codd`), rather than mimicking the hasql backend's
+  `migrate`/`validate` Either-returning shape.
   Rationale: `codd` is forward-only and verifies the live schema against a consumer-owned on-disk
   snapshot; it has no honest analogue of `hasql-migration`'s `validate`. `codd`'s own guidance is for
   libraries to ship migrations as Haskell values and let the consuming service own the expected-schema
   snapshot and choose `StrictCheck`. Faking a `validate` would mislead.
   Date: 2026-06-06
+  **Revised 2026-06-06 during EP-3 implementation:** the original wording said the simple entry point
+  would default to "no schema verification (`LaxCheck`)". That is incorrect — codd's `LaxCheck` (and
+  `StrictCheck`) both read an on-disk snapshot and fail when it is absent, so `LaxCheck` is *not*
+  snapshot-free. The implemented API is: `migrations` (the values), `applyTypeIdMigrations`
+  (verification-aware, takes a `VerifySchemas` argument for consumers who own a snapshot, wrapping
+  `Codd.applyMigrations`), and `migrateFromEnv` (the snapshot-less batteries-included entry point,
+  wrapping `Codd.applyMigrationsNoCheck` and returning `SchemasNotVerified`). See the Surprises &
+  Discoveries entry and `docs/plans/3-create-typeid-hs-codd-package.md` for evidence.
 
 - Decision: New package versions all start at `0.1.0.0`.
   Rationale: `typeid-hs-sql` and `typeid-hs-codd` are new package names; `typeid-hs-hasql-migration` is

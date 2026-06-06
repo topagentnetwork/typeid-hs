@@ -1,0 +1,51 @@
+cabal-version: 3.4
+name: typeid-hs-codd
+version: 0.1.0.0
+synopsis: PostgreSQL TypeID migrations via codd
+description:
+  Applies the TypeID PostgreSQL migrations (from typeid-hs-sql) using the codd
+  migration library. Ships the migrations as codd AddedSqlMigration values and
+  provides thin helpers to apply them; the consuming service owns its
+  expected-schema snapshot and chooses strict or lax verification.
+
+license:
+author: Nadeem Bitar
+maintainer: nadeem@topagentnetwork.com
+build-type: Simple
+
+common common-options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wmissing-export-lists
+    -Wpartial-fields
+    -Wmissing-deriving-strategies
+
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    LambdaCase
+    OverloadedStrings
+
+library
+  import: common-options
+  hs-source-dirs: src
+  default-language: GHC2021
+  exposed-modules:
+    TypeId.Db.Codd.Migration
+
+  build-depends:
+    base >=4.17 && <5,
+    bytestring ^>=0.12,
+    codd,
+    exceptions,
+    streaming,
+    text ^>=2.1.1,
+    time,
+    typeid-hs-sql,
+    unliftio-core,

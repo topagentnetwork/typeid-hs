@@ -1,8 +1,15 @@
 packages:
   ./typeid-hs-sql
   ./typeid-hs-hasql-migration
+  ./typeid-hs-codd
 
 source-repository-package
   type: git
   location: https://github.com/shinzui/hasql-migration
   tag: 4aaff6c0919d1fe8e1c248c3ce4ce05775c59c8c
+
+source-repository-package
+  type: git
+  location: https://github.com/shinzui/codd-project
+  tag: d176b3088f23ef2218c7a1f31835e8ee0c0601aa
+  subdir: codd

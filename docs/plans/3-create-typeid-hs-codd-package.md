@@ -51,10 +51,10 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 0 (spike): a throwaway proves `parseAddedSqlMigration` + `PureStream` + `applyMigrations` apply our SQL to a live DB
-- [ ] Milestone 1: `typeid-hs-codd/` package + `.cabal`; `codd` dependency resolves; empty lib builds
-- [ ] Milestone 2: `TypeId.Db.Codd.Migration` exposes `migrations`, `applyTypeIdMigrations`, `migrateFromEnv`; builds clean
-- [ ] Milestone 3: end-to-end apply against PostgreSQL; TypeID objects verified present
+- [x] Milestone 0 (spike): folded into M1+M3 — the codd API was first verified against the pinned source (`/Users/shinzui/Keikaku/hub/haskell/codd-project/codd`), then proven live in M3 (2026-06-06)
+- [x] Milestone 1: `typeid-hs-codd/` package + `.cabal`; `codd` dependency resolves (clean solve, no `allow-newer`); empty lib builds (2026-06-06)
+- [x] Milestone 2: `TypeId.Db.Codd.Migration` exposes `version`, `migrations`, `applyTypeIdMigrations`, `migrateFromEnv`; builds clean (2026-06-06)
+- [x] Milestone 3: end-to-end apply against PostgreSQL 17; all four migrations committed in order; TypeID objects verified present (2026-06-06)
 
 
 ## Surprises & Discoveries
@@ -62,7 +62,47 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- **The pinned codd commit was not fetchable; pinned to `origin/master` instead.** The plan pinned
+  `codd` at `b1cf7e52da5799a76e538e9382d55e84d67b0656`, but `cabal` failed with
+  `fatal: remote error: upload-pack: not our ref b1cf7e52...`. That commit is a local-only,
+  docs-only commit ("docs: add codd adoption guide") on the mori checkout that was never pushed.
+  The remote's `origin/master` is `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`, and
+  `git diff --stat origin/master HEAD -- codd/` is empty (identical `codd/` source). The
+  `cabal.project` pin was changed to `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`, which the remote
+  serves (`git ls-remote origin master` confirms). Cross-plan note: EP-4's `mori.dhall`/README
+  should reference this fetchable commit, not the unpushed one.
+
+- **`codd` solved cleanly under GHC 9.12.4 with no `allow-newer`.** The plain git pin resolved:
+  `codd-0.1.8` plus transitive `uuid`, `formatting`, `haxl`, `unliftio`, `postgresql-simple`,
+  `streaming`. No Hackage fallback and no `allow-newer` lines were needed.
+
+- **Two extra direct dependencies required:** `exceptions` (for `Control.Monad.Catch (MonadThrow)`)
+  and `unliftio-core` (for `Control.Monad.IO.Unlift (MonadUnliftIO)`). GHC reported them as hidden
+  packages until added to `build-depends`.
+
+- **A type-inference fix was needed for the `PureStream` monad.** `codd`'s `MigrationStream` class
+  has no functional dependency, so GHC would not unify the `PureStream`'s monad with the parsing
+  monad and reported `The type variable 'm0' is ambiguous`. The fix: give `migrations` an explicit
+  `forall m.` (ScopedTypeVariables, on by default in GHC2021), a local signature on the worker
+  `parseOne :: (Int, FilePath) -> m (AddedSqlMigration m)`, and an explicit annotation
+  `stream = PureStream (...) :: PureStream m`.
+
+- **CRITICAL DESIGN DISCOVERY — `LaxCheck` is NOT "no verification".** The plan (and the MasterPlan
+  Decision Log) assumed `migrateFromEnv` could use `LaxCheck` with an empty
+  `CODD_EXPECTED_SCHEMA_DIR` and get a `SchemasDiffer` result. In reality, `codd`'s *both*
+  `laxCheckLastAction` and `strictCheckLastAction` call `readRepsFromDisk` on the expected-schema
+  snapshot; a *missing* snapshot is a hard I/O error, not a "differ" outcome. The first run threw
+  `*** Exception: user error (File /tmp/codd-empty-schema/v17/db-settings was expected but does not
+  exist)` and the whole migration transaction rolled back (verified: `typeid_generate_text` and
+  `codd.sql_migrations` did not exist afterward). `applyMigrations` only ever returns `SchemasMatch`
+  or `SchemasDiffer` — `SchemasNotVerified` is reserved for the no-check path. Resolution:
+  `migrateFromEnv` was changed to use `Codd.applyMigrationsNoCheck` (which reads no snapshot) and
+  return `SchemasNotVerified`. This better honors the MasterPlan's *intent* ("default to no schema
+  verification; consumer owns the snapshot") than `LaxCheck` did. `applyTypeIdMigrations` retains its
+  `VerifySchemas` parameter, so a consumer who owns a snapshot can still pass `LaxCheck`/`StrictCheck`.
+  Evidence after the fix: the log shows all four migrations applied and `COMMITed transaction`,
+  `migrateFromEnv` returned `SchemasNotVerified`, and `SELECT typeid_generate_text('user')` returned
+  `user_01kteqv370e2btyfanv9dvby71`. Recorded in the MasterPlan Surprises & Discoveries and Decision Log.
 
 
 ## Decision Log
@@ -95,6 +135,56 @@ implementation. Provide concise evidence.
   reference. If a plain Hackage `codd` dependency happens to solve cleanly, that is acceptable too — see
   Milestone 1.
   Date: 2026-06-06
+
+- Decision (revised during implementation): `migrateFromEnv` applies the migrations with **no schema
+  verification** via `Codd.applyMigrationsNoCheck` and returns `SchemasNotVerified`, rather than calling
+  `applyTypeIdMigrations ... LaxCheck` as originally drafted.
+  Rationale: Implementation revealed that `codd`'s `LaxCheck` is not "no verification" — both `LaxCheck`
+  and `StrictCheck` read an expected-schema snapshot from `CODD_EXPECTED_SCHEMA_DIR` and fail hard (an
+  I/O error that rolls back the whole migration) when that snapshot is absent. Since this library ships
+  no snapshot (the consumer owns it), the batteries-included entry point must not require one. Using
+  `applyMigrationsNoCheck` makes `migrateFromEnv` actually usable without a snapshot and honestly reports
+  `SchemasNotVerified`. The verification-aware path is preserved: `applyTypeIdMigrations` still takes a
+  `VerifySchemas` argument, so a consumer that owns a snapshot can pass `LaxCheck` or `StrictCheck`. See
+  Surprises & Discoveries for evidence, and the MasterPlan Surprises & Discoveries / Decision Log.
+  Date: 2026-06-06
+
+- Decision (resolved during implementation): pin `codd` at the fetchable commit
+  `d176b3088f23ef2218c7a1f31835e8ee0c0601aa` (the remote's `origin/master`) instead of the
+  plan's `b1cf7e52da5799a76e538e9382d55e84d67b0656`.
+  Rationale: `b1cf7e52` is an unpushed, docs-only local commit; the remote rejects it
+  (`not our ref`). `d176b30` is the pushed tip with byte-identical `codd/` source. See Surprises.
+  Date: 2026-06-06
+
+
+## Outcomes & Retrospective
+
+EP-3 is complete. A new package `typeid-hs-codd` applies the same TypeID SQL through `codd`. Its
+module `TypeId.Db.Codd.Migration` exports `version :: String`,
+`migrations :: (Monad m, EnvVars m) => m [AddedSqlMigration m]` (the migrations as codd values,
+named with deterministic `2024-01-01-00-00-0N-typeid-<file>` timestamps so codd orders them and
+they do not collide with a consumer's own migrations), `applyTypeIdMigrations` (verification-aware,
+takes `CoddSettings`/`DiffTime`/`VerifySchemas`), and `migrateFromEnv :: IO ApplyResult` (reads
+`CoddSettings` from environment and applies with no verification). `codd` is pinned in
+`cabal.project` at the fetchable `d176b3088f23ef2218c7a1f31835e8ee0c0601aa`; the dependency graph
+solved cleanly under GHC 9.12.4 with no `allow-newer`. A clean `cabal build typeid-hs-codd`
+compiles warning-free.
+
+Verified end-to-end against PostgreSQL 17: `migrateFromEnv` applied all four migrations in one
+committed transaction (`COMMITed transaction` / `Successfully applied all migrations`), returned
+`SchemasNotVerified`, codd recorded all four rows in `codd.sql_migrations` in order, and
+`SELECT typeid_generate_text('user')` returned `user_01kteqv370e2btyfanv9dvby71`.
+
+The most important lesson is the `LaxCheck` discovery (see Surprises and the revised Decision Log):
+`LaxCheck` reads an on-disk snapshot and is unusable without one, so `migrateFromEnv` uses
+`applyMigrationsNoCheck`. The plan's Milestone 0/1/3 examples that pair `LaxCheck` with an empty
+expected-schema dir would throw; the working pattern for a snapshot-less apply is
+`applyMigrationsNoCheck`. Two extra direct deps (`exceptions`, `unliftio-core`) and a `forall m.` +
+`PureStream m` annotation were also needed. EP-4 should document the `migrateFromEnv` (no-check) vs
+`applyTypeIdMigrations` (snapshot-owning) distinction.
+
+(Note: this section header was absent from the generated skeleton and added during EP-3
+implementation, as the ExecPlan spec requires every plan to maintain an Outcomes section.)
 
 
 ## Context and Orientation
