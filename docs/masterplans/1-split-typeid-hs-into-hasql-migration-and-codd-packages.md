@@ -100,7 +100,7 @@ single pass after both backends exist.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Create typeid-hs-sql shared core and multi-package layout | docs/plans/1-create-typeid-hs-sql-shared-core-and-multi-package-layout.md | None | None | Not Started |
+| 1 | Create typeid-hs-sql shared core and multi-package layout | docs/plans/1-create-typeid-hs-sql-shared-core-and-multi-package-layout.md | None | None | Complete |
 | 2 | Rename and refactor typeid-hs-hasql-migration onto typeid-hs-sql | docs/plans/2-rename-and-refactor-typeid-hs-hasql-migration-onto-typeid-hs-sql.md | EP-1 | None | Not Started |
 | 3 | Create typeid-hs-codd package | docs/plans/3-create-typeid-hs-codd-package.md | EP-1 | None | Not Started |
 | 4 | Wire nix, mori, and docs for the split packages | docs/plans/4-wire-nix-mori-docs-for-the-split-packages.md | EP-1 | EP-2, EP-3 | Not Started |
@@ -193,8 +193,8 @@ EP-2 and EP-3 must not edit the root README; if they need package-level usage do
 Track milestone-level progress across all child plans. Each entry names the child plan
 and the milestone. This section provides an at-a-glance view of the entire initiative.
 
-- [ ] EP-1: Multi-package `cabal.project` builds and `typeid-hs-sql` compiles
-- [ ] EP-1: `TypeId.Db.Sql` exposes `version`, `migrationFiles`, `sqlFiles` from embedded SQL
+- [x] EP-1: Multi-package `cabal.project` builds and `typeid-hs-sql` compiles
+- [x] EP-1: `TypeId.Db.Sql` exposes `version`, `migrationFiles`, `sqlFiles` from embedded SQL
 - [ ] EP-2: `typeid-hs-hasql-migration` package exists, renamed from `typeid-hs`
 - [ ] EP-2: `V0_0_1` consumes `typeid-hs-sql`; old root package and `database/` removed
 - [ ] EP-2: Public API (`TypeId.Db.Migration` et al.) and behavior preserved; builds clean

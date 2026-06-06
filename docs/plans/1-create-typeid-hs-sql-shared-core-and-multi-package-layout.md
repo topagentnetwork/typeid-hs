@@ -48,11 +48,11 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 1: `typeid-hs-sql` package directory, `.cabal`, and SQL files in place
-- [ ] Milestone 1: `cabal.project` converted to multi-package and seeded with `./typeid-hs-sql`
-- [ ] Milestone 2: `TypeId.Db.Sql` module embeds the SQL and exposes `version`/`migrationFiles`/`sqlFiles`
-- [ ] Milestone 2: `cabal build typeid-hs-sql` succeeds
-- [ ] Milestone 3: GHCi check confirms four files embedded in order with real contents
+- [x] Milestone 1: `typeid-hs-sql` package directory, `.cabal`, and SQL files in place (2026-06-06)
+- [x] Milestone 1: `cabal.project` converted to multi-package and seeded with `./typeid-hs-sql` (2026-06-06)
+- [x] Milestone 2: `TypeId.Db.Sql` module embeds the SQL and exposes `version`/`migrationFiles`/`sqlFiles` (2026-06-06)
+- [x] Milestone 2: `cabal build typeid-hs-sql` succeeds (2026-06-06)
+- [x] Milestone 3: GHCi check confirms four files embedded in order with real contents (2026-06-06)
 
 
 ## Surprises & Discoveries
@@ -60,7 +60,11 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- `git mv database/v0.0.1 typeid-hs-sql/database/v0.0.1` left an empty `database/` directory
+  behind on the filesystem (git stops tracking the moved files but does not prune the now-empty
+  parent dir). The acceptance check `test ! -d database` therefore failed until the leftover dir
+  was removed with `rmdir database`. Anyone re-running Milestone 1 should `rmdir database` after the
+  move. Evidence: `if [ -d database ]; then echo "database/ EXISTS" ...` printed `database/ EXISTS`.
 
 
 ## Decision Log
@@ -78,6 +82,28 @@ implementation. Provide concise evidence.
   against the owning package's directory. Keeping the SQL inside `typeid-hs-sql` makes embedding and
   source-distribution correct. See the MasterPlan Integration Points entry 3.
   Date: 2026-06-06
+
+
+## Outcomes & Retrospective
+
+EP-1 is complete. The repository is now a multi-package cabal project whose `cabal.project`
+lists `./typeid-hs-sql` and preserves the `hasql-migration` source-repository pin. The new
+`typeid-hs-sql` package embeds the four SQL files once (the only copy now lives at
+`typeid-hs-sql/database/v0.0.1/`, the root `database/` directory is gone) and exposes the hard
+contract `version :: String`, `migrationFiles :: [FilePath]`, and
+`sqlFiles :: [(FilePath, ByteString)]` from `TypeId.Db.Sql` with no dependency on `hasql` or
+`codd`. A clean `cabal build typeid-hs-sql` compiles warning-free, and the GHCi check confirmed
+the four files are embedded in canonical order with non-empty real SQL bytes (the first file
+begins with the UUIDv7 comment). The old `typeid-hs.cabal` and `src/` remain on disk but are
+unlisted in `cabal.project`; EP-2 removes them.
+
+The interface defined here matches MasterPlan Integration Points entry 2 exactly, so EP-2 and
+EP-3 can be implemented against it without changes. No deviations from the plan were required.
+Only lesson learned: see Surprises — `git mv` of a subdirectory leaves the empty parent dir,
+which the acceptance check flags.
+
+(Note: this section header was absent from the generated skeleton and added during EP-1
+implementation, as the ExecPlan spec requires every plan to maintain an Outcomes section.)
 
 
 ## Context and Orientation

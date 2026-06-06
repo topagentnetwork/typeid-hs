@@ -1,0 +1,41 @@
+cabal-version: 3.4
+name: typeid-hs-sql
+version: 0.1.0.0
+synopsis: Embedded PostgreSQL TypeID SQL, tool-agnostic
+description:
+  Embeds the TypeID PostgreSQL migration SQL and exposes it as plain Haskell
+  values (version, ordered file names, and each file's bytes). Intended to be
+  consumed by migration-tool-specific backends such as typeid-hs-hasql-migration
+  and typeid-hs-codd.
+
+license:
+author: Nadeem Bitar
+maintainer: nadeem@topagentnetwork.com
+build-type: Simple
+extra-source-files: database/**/*.sql
+
+common common-options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wmissing-export-lists
+    -Wpartial-fields
+    -Wmissing-deriving-strategies
+
+library
+  import: common-options
+  hs-source-dirs: src
+  default-language: GHC2021
+  exposed-modules:
+    TypeId.Db.Sql
+
+  build-depends:
+    base >=4.17 && <5,
+    bytestring ^>=0.12,
+    file-embed,
+    filepath,
