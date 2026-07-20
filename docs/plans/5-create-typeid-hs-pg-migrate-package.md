@@ -72,7 +72,7 @@ This section must always reflect the actual current state of the work.
 
 - [x] Milestone 1 (2026-07-20T22:29Z): `typeid-hs-pg-migrate/` package + `.cabal` created; `pg-migrate` pinned in `cabal.project` (tag `v1.1.0.0` / `f39d64e`, subdir `pg-migrate`); dependency graph resolves **cleanly** under GHC 9.12.4 (no `allow-newer` needed); placeholder library builds.
 - [x] Milestone 2 (2026-07-20T22:33Z): `TypeId.Db.PgMigrate.Migration` exposes `version`, `componentNameText`, `typeIdComponent`, `typeIdPlan`, `TypeIdMigrateError`, `migrateTypeId`; builds clean with `-Wall` (no warnings); `cabal build all` green; REPL confirmed `component ok`, `plan ok`, `v0.0.1` — the embedded SQL passes `pg-migrate`'s validator and the single-component plan is well-formed.
-- [ ] Milestone 3: end-to-end apply against a live PostgreSQL via `migrateTypeId`; four migrations recorded `applied` in `pgmigrate.migrations` in order; TypeID objects verified present; rerun is idempotent (`AlreadyApplied`).
+- [x] Milestone 3 (2026-07-20T22:34Z): end-to-end apply against a live PostgreSQL 17.10 via `migrateTypeId defaultRunOptions` returned `Right (MigrationReport ...)` with four `AppliedNow` results in order; `pgmigrate.migrations` holds four `applied` rows for component `typeid` at positions 1..4; `SELECT typeid_generate_text('user')` returned `user_01ky0tj3sxf4t9tjavpsygab2z`; rerun returned four `AlreadyApplied` results (idempotent). Throwaway DB torn down.
 - [ ] Milestone 4: `README.md` documents the `pg-migrate` backend; `mori.dhall` lists the fourth package and the `shinzui/pg-migrate` dependency.
 
 
@@ -89,6 +89,16 @@ implementation. Provide concise evidence.
   (lib)` as the build set (plus a `typeid-hs-sql` reconfigure). This is the "clean solve" branch of
   the plan's Idempotence and Recovery guidance; Milestone 4 documents it as the final dependency
   story (no `allow-newer` / `constraints` entries required).
+
+- Milestone 3: end-to-end validation was fully green against PostgreSQL 17.10 (the version the
+  Nix dev shell provides; the plan's compatibility note cites 17/18). The first
+  `migrateTypeId defaultRunOptions` apply produced four `AppliedNow` `MigrationResult`s in order
+  (`typeid/01_uuidv7`..`typeid/04_operator`) with `cleanupIssues = []`; `pgmigrate.migrations` held
+  four `applied` rows at positions 1..4; `typeid_generate_text('user')` returned a `user_`-prefixed
+  TypeID; and the immediate rerun returned four `AlreadyApplied` results with `duration = Nothing`.
+  No SQL adaptation was needed — the dollar-quoted PL/pgSQL bodies passed `pg-migrate`'s validator
+  exactly as the Context section predicted, confirmed both at the REPL (Milestone 2) and against a
+  live database (this milestone).
 
 
 ## Decision Log
