@@ -2,6 +2,7 @@ packages:
   ./typeid-hs-sql
   ./typeid-hs-hasql-migration
   ./typeid-hs-codd
+  ./typeid-hs-pg-migrate
 
 source-repository-package
   type: git
@@ -12,3 +13,9 @@ source-repository-package
   type: git
   location: https://github.com/mzabani/codd
   tag: 29478ff469b1c0466a7d126d64ab3dc1dbff4756
+
+source-repository-package
+  type: git
+  location: https://github.com/shinzui/pg-migrate
+  tag: f39d64e354818999667d345a1452f33eb4857fc1
+  subdir: pg-migrate

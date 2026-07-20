@@ -1,0 +1,47 @@
+cabal-version: 3.4
+name: typeid-hs-pg-migrate
+version: 0.1.0.0
+synopsis: PostgreSQL TypeID migrations via pg-migrate
+description:
+  Exposes the TypeID PostgreSQL migrations (from typeid-hs-sql) as a pg-migrate
+  migration component so an application can compose it into its own plan, plus a
+  batteries-included helper to apply just the TypeID migrations.
+
+license:
+author: Nadeem Bitar
+maintainer: nadeem@topagentnetwork.com
+build-type: Simple
+
+common common-options
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wmissing-export-lists
+    -Wpartial-fields
+    -Wmissing-deriving-strategies
+
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    LambdaCase
+    OverloadedStrings
+
+library
+  import: common-options
+  hs-source-dirs: src
+  default-language: GHC2021
+  exposed-modules:
+    TypeId.Db.PgMigrate.Migration
+
+  build-depends:
+    base >=4.17 && <5,
+    containers,
+    hasql >=1.10 && <1.11,
+    pg-migrate,
+    text ^>=2.1.1,
+    typeid-hs-sql,
