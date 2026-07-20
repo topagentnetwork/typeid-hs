@@ -32,14 +32,18 @@ in  Schema.Project::{
         , type = Schema.PackageType.Library
         , language = Schema.Language.Haskell
         , path = Some "typeid-hs-hasql-migration"
-        , description = Some "PostgreSQL TypeID migrations via hasql-migration"
+        , description = Some
+            "PostgreSQL TypeID migrations via hasql-migration (deprecated; use typeid-hs-pg-migrate)"
+        , lifecycle = Some Schema.Lifecycle.Deprecated
         }
       , Schema.Package::{
         , name = "typeid-hs-codd"
         , type = Schema.PackageType.Library
         , language = Schema.Language.Haskell
         , path = Some "typeid-hs-codd"
-        , description = Some "PostgreSQL TypeID migrations via codd"
+        , description = Some
+            "PostgreSQL TypeID migrations via codd (deprecated; use typeid-hs-pg-migrate)"
+        , lifecycle = Some Schema.Lifecycle.Deprecated
         }
       , Schema.Package::{
         , name = "typeid-hs-pg-migrate"
