@@ -1,6 +1,6 @@
 # typeid-hs
 
-PostgreSQL migrations for [TypeID](https://github.com/jetify-com/typeid), shipped as two
+PostgreSQL migrations for [TypeID](https://github.com/jetify-com/typeid), shipped as three
 interchangeable backends over a shared SQL core. TypeID is a type-safe, K-sortable, globally
 unique identifier inspired by Stripe IDs.
 
@@ -9,18 +9,22 @@ The SQL migrations are sourced from
 
 ## Packages
 
-This repository builds three packages:
+This repository builds four packages:
 
 - **`typeid-hs-sql`** — the embedded TypeID SQL exposed as plain Haskell values (the version
-  string, the ordered file names, and each file's bytes). Tool-agnostic; depends on neither hasql
-  nor codd. The two backends build on it.
+  string, the ordered file names, and each file's bytes). Tool-agnostic; depends on none of hasql,
+  codd, or pg-migrate. The three backends build on it.
 - **`typeid-hs-hasql-migration`** — applies the migrations with
   [hasql-migration](https://hackage.haskell.org/package/hasql-migration). Choose this if your
   project already uses hasql.
 - **`typeid-hs-codd`** — applies the same migrations with [codd](https://github.com/mzabani/codd).
   Choose this if your project uses codd's forward-only, schema-verifying workflow.
+- **`typeid-hs-pg-migrate`** — exposes the same migrations as a
+  [pg-migrate](https://github.com/shinzui/pg-migrate) migration component. Choose this if your
+  project is standardized on pg-migrate: compose the TypeID component into your own explicitly
+  ordered plan (or use the batteries-included helper to apply just the TypeID migrations).
 
-Depend on exactly one backend; it pulls in `typeid-hs-sql` for you. Both backends install the
+Depend on exactly one backend; it pulls in `typeid-hs-sql` for you. All three backends install the
 identical set of PostgreSQL objects (see [What Gets Installed](#what-gets-installed)).
 
 ## Migrating from `typeid-hs`
@@ -146,9 +150,74 @@ snapshot directory (`CODD_EXPECTED_SCHEMA_DIR`). This package does not ship a sn
 consuming service's responsibility. Use `migrateFromEnv` (no verification) when you do not have a
 snapshot.
 
+## Usage — pg-migrate backend
+
+Add `typeid-hs-pg-migrate` to your `build-depends`. This backend follows
+[pg-migrate](https://github.com/shinzui/pg-migrate)'s model: **libraries own ordered migration
+components, and the application composes those components into one explicitly ordered plan and runs
+it.** The TypeID migrations are exposed as a component named `"typeid"` (via `typeIdComponent`), with
+its name available as `componentNameText`. The four SQL files become the migrations `typeid/01_uuidv7`,
+`typeid/02_base32`, `typeid/03_typeid`, and `typeid/04_operator`.
+
+The library ships **no** `pgmigrate` schema or ledger of its own — the consuming application owns the
+database and the `RunOptions` (ledger schema, lock wait, statement timeout).
+
+To compose the TypeID component with your application's own migrations, build one plan with
+`migrationPlan` and declare a dependency on `componentNameText` (`"typeid"`) wherever you need the
+TypeID objects to exist first. Listing TypeID first keeps its objects installed before your
+migrations run:
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import qualified Data.Set as Set
+import Database.PostgreSQL.Migrate
+  ( DefinitionError,
+    MigrationPlan,
+    PlanError,
+    migrationComponentFromEmbeddedSql,
+    migrationPlan,
+  )
+import TypeId.Db.PgMigrate.Migration (componentNameText, typeIdComponent)
+
+-- Compose the TypeID component with your application's own component into one
+-- plan. Your component declares a dependency on componentNameText ("typeid"),
+-- and TypeID is listed first, so its objects exist before your migrations run.
+appPlan :: Either DefinitionError (Either PlanError MigrationPlan)
+appPlan = do
+  typeid <- typeIdComponent
+  app <-
+    migrationComponentFromEmbeddedSql
+      "app"
+      (Set.singleton componentNameText)   -- "typeid" must be applied first
+      (("0001-create-users.sql", "CREATE TABLE users (id typeid PRIMARY KEY);") :| [])
+  pure (migrationPlan (typeid :| [app]))
+```
+
+For the simplest case — applying just the TypeID migrations — use the batteries-included
+`migrateTypeId`, which builds the single-component plan and runs it:
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+
+import Database.PostgreSQL.Migrate (defaultRunOptions)
+import qualified Hasql.Connection.Settings as Settings
+import TypeId.Db.PgMigrate.Migration (migrateTypeId)
+
+main :: IO ()
+main = do
+  -- Batteries-included: apply just the TypeID migrations.
+  result <- migrateTypeId defaultRunOptions
+              (Settings.connectionString "postgresql://postgres@localhost/mydb")
+  case result of
+    Right report -> print report          -- MigrationReport with per-migration outcomes
+    Left err     -> print err             -- TypeIdMigrateError
+```
+
 ## What Gets Installed
 
-Both backends install the following PostgreSQL objects:
+All three backends install the following PostgreSQL objects:
 
 | Object | Description |
 |--------|-------------|
@@ -193,12 +262,14 @@ SELECT * FROM users WHERE id === 'user_01h455vb4pex5vsknk084sn02q';
 
 ## Version
 
-The schema version is available from both backends' top-level modules:
+The schema version is available from every backend's top-level module:
 
 ```haskell
-import TypeId.Db.Migration (version)        -- hasql-migration backend
+import TypeId.Db.Migration (version)             -- hasql-migration backend
 -- or
-import TypeId.Db.Codd.Migration (version)   -- codd backend
+import TypeId.Db.Codd.Migration (version)        -- codd backend
+-- or
+import TypeId.Db.PgMigrate.Migration (version)   -- pg-migrate backend
 
 main = putStrLn version  -- "v0.0.1"
 ```

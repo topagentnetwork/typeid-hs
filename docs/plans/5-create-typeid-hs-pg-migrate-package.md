@@ -73,7 +73,7 @@ This section must always reflect the actual current state of the work.
 - [x] Milestone 1 (2026-07-20T22:29Z): `typeid-hs-pg-migrate/` package + `.cabal` created; `pg-migrate` pinned in `cabal.project` (tag `v1.1.0.0` / `f39d64e`, subdir `pg-migrate`); dependency graph resolves **cleanly** under GHC 9.12.4 (no `allow-newer` needed); placeholder library builds.
 - [x] Milestone 2 (2026-07-20T22:33Z): `TypeId.Db.PgMigrate.Migration` exposes `version`, `componentNameText`, `typeIdComponent`, `typeIdPlan`, `TypeIdMigrateError`, `migrateTypeId`; builds clean with `-Wall` (no warnings); `cabal build all` green; REPL confirmed `component ok`, `plan ok`, `v0.0.1` — the embedded SQL passes `pg-migrate`'s validator and the single-component plan is well-formed.
 - [x] Milestone 3 (2026-07-20T22:34Z): end-to-end apply against a live PostgreSQL 17.10 via `migrateTypeId defaultRunOptions` returned `Right (MigrationReport ...)` with four `AppliedNow` results in order; `pgmigrate.migrations` holds four `applied` rows for component `typeid` at positions 1..4; `SELECT typeid_generate_text('user')` returned `user_01ky0tj3sxf4t9tjavpsygab2z`; rerun returned four `AlreadyApplied` results (idempotent). Throwaway DB torn down.
-- [ ] Milestone 4: `README.md` documents the `pg-migrate` backend; `mori.dhall` lists the fourth package and the `shinzui/pg-migrate` dependency.
+- [x] Milestone 4 (2026-07-20T22:40Z): `README.md` documents the `pg-migrate` backend (new "Usage — pg-migrate backend" section with both compose and batteries-included examples; Packages list now names four packages / three backends; What Gets Installed and Version sections updated); `mori.dhall` lists the fourth package and the `shinzui/pg-migrate` dependency and type-checks. README compose snippet verified to compile/evaluate to `Right (Right _)` at the REPL. `cabal build all` green. ADR distillation pass done: created `docs/adr/0001-backends-over-shared-sql-core.md`.
 
 
 ## Surprises & Discoveries
@@ -187,22 +187,48 @@ Compare the result against the original purpose. Before marking the plan complet
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+**Outcome (2026-07-20).** All four milestones completed and every Validation & Acceptance
+criterion holds. The repository now ships a third migration backend, `typeid-hs-pg-migrate`, over
+the shared `typeid-hs-sql` core, matching the original purpose exactly: a `pg-migrate`-standardized
+application can either splice `typeIdComponent` into its own explicitly ordered plan (declaring a
+dependency on `componentNameText` = `"typeid"`) or call the batteries-included `migrateTypeId` to
+apply just the TypeID migrations.
+
+Evidence against the purpose:
+
+- `cabal clean && cabal build typeid-hs-pg-migrate` resolves and builds under GHC 9.12.4 (clean
+  solve, no `allow-newer`).
+- `TypeId.Db.PgMigrate.Migration` exports `version`, `componentNameText`, `typeIdComponent`,
+  `typeIdPlan`, `TypeIdMigrateError`, and `migrateTypeId`; `typeIdComponent` and `typeIdPlan`
+  evaluate to `Right` at the REPL.
+- Live apply against PostgreSQL 17.10 recorded four `applied` rows (`typeid/01_uuidv7`..`04_operator`)
+  at positions 1..4 in `pgmigrate.migrations`, `typeid_generate_text('user')` returned a
+  `user_`-prefixed TypeID, and a rerun reported all four `AlreadyApplied`.
+- `README.md` documents the backend with compile-verified snippets; `mori.dhall` lists four
+  packages and the `shinzui/pg-migrate` dependency and type-checks.
+
+**Gaps / lessons.** No design surprises: the `pg-migrate` API matched the signatures verified from
+the pinned source during planning, the dollar-quoted PL/pgSQL passed `pg-migrate`'s SQL validator
+with no adaptation, and the whole `pg-migrate` closure solved cleanly against the existing package
+set (only `hasql-transaction` and `pg-migrate` itself were new builds). The thin-adapter approach
+(`migrationComponentFromEmbeddedSql` fed directly from `Sql.sqlFiles`, no TH, no manifest) held up
+end-to-end. Durable architecture and policy lessons were distilled into
+`docs/adr/0001-backends-over-shared-sql-core.md`.
 
 
 ## Context and Orientation
 
 Assume no prior knowledge of this repository beyond the working tree.
 
-**ADRs.** There is no `docs/adr/` directory in this repository at the time of writing (verified:
-`ls docs/adr` reports no such directory). No relevant ADR exists to consult. The durable
-project context this plan builds on lives in the MasterPlan and prior ExecPlans instead:
+**ADRs.** There was no `docs/adr/` directory when this plan began (verified: `ls docs/adr`
+reported no such directory), so the durable project context this plan built on lived in the
+MasterPlan and prior ExecPlans instead:
 `docs/masterplans/1-split-typeid-hs-into-hasql-migration-and-codd-packages.md` and
-`docs/plans/3-create-typeid-hs-codd-package.md`. At completion, per the ExecPlan specification,
-review this plan's Decision Log/Surprises/Outcomes and promote durable, project-level decisions
-(the "three-then-four backends over one SQL core" architecture, the pinned-fork policy, the
-"library owns the component; application composes and runs" boundary) into a new `docs/adr/`
-entry if they warrant a durable home.
+`docs/plans/3-create-typeid-hs-codd-package.md`. At completion (per the ExecPlan specification) the
+durable, project-level decisions from this plan's Decision Log/Surprises/Outcomes — the "N backends
+over one SQL core" architecture, the pinned-fork (`source-repository-package`) policy, and the
+"library owns the migrations; application owns the database and its config" boundary — were
+promoted into `docs/adr/0001-backends-over-shared-sql-core.md`.
 
 **Repository state at the start of this plan.** The tree is a cabal multi-package project
 (a "monorepo": several packages built from one `cabal.project`). Relevant layout:

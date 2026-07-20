@@ -9,7 +9,7 @@ in  Schema.Project::{
       , type = Schema.PackageType.Library
       , language = Schema.Language.Haskell
       , lifecycle = Schema.Lifecycle.Active
-      , description = Some "PostgreSQL TypeID migrations, shipped as hasql-migration and codd backends over a shared SQL core"
+      , description = Some "PostgreSQL TypeID migrations, shipped as hasql-migration, codd, and pg-migrate backends over a shared SQL core"
       , domains = [ "TypeID", "Database" ]
       , owners = [ "shinzui" ]
       }
@@ -41,11 +41,19 @@ in  Schema.Project::{
         , path = Some "typeid-hs-codd"
         , description = Some "PostgreSQL TypeID migrations via codd"
         }
+      , Schema.Package::{
+        , name = "typeid-hs-pg-migrate"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "typeid-hs-pg-migrate"
+        , description = Some "PostgreSQL TypeID migrations via pg-migrate"
+        }
       ]
     , dependencies =
       [ "shinzui/hasql-migration"
       , "hasql/hasql"
       , "ekmett/lens"
       , "mzabani/codd"
+      , "shinzui/pg-migrate"
       ]
     }
