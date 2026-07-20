@@ -71,7 +71,7 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 This section must always reflect the actual current state of the work.
 
 - [x] Milestone 1 (2026-07-20T22:29Z): `typeid-hs-pg-migrate/` package + `.cabal` created; `pg-migrate` pinned in `cabal.project` (tag `v1.1.0.0` / `f39d64e`, subdir `pg-migrate`); dependency graph resolves **cleanly** under GHC 9.12.4 (no `allow-newer` needed); placeholder library builds.
-- [ ] Milestone 2: `TypeId.Db.PgMigrate.Migration` exposes `version`, `componentNameText`, `typeIdComponent`, `typeIdPlan`, `TypeIdMigrateError`, `migrateTypeId`; builds clean with `-Wall`; `typeIdComponent` and `typeIdPlan` evaluate to `Right` at the REPL (proves the embedded SQL passes `pg-migrate`'s SQL validator).
+- [x] Milestone 2 (2026-07-20T22:33Z): `TypeId.Db.PgMigrate.Migration` exposes `version`, `componentNameText`, `typeIdComponent`, `typeIdPlan`, `TypeIdMigrateError`, `migrateTypeId`; builds clean with `-Wall` (no warnings); `cabal build all` green; REPL confirmed `component ok`, `plan ok`, `v0.0.1` — the embedded SQL passes `pg-migrate`'s validator and the single-component plan is well-formed.
 - [ ] Milestone 3: end-to-end apply against a live PostgreSQL via `migrateTypeId`; four migrations recorded `applied` in `pgmigrate.migrations` in order; TypeID objects verified present; rerun is idempotent (`AlreadyApplied`).
 - [ ] Milestone 4: `README.md` documents the `pg-migrate` backend; `mori.dhall` lists the fourth package and the `shinzui/pg-migrate` dependency.
 
